@@ -57,6 +57,7 @@ $usergroup_permissions = array(
 	"canuploadavatars" => 1,
 	"canratemembers" => 1,
 	"canchangename" => 0,
+	"canbeinvisible" => 1,
 	"canbereported" => 0,
 	"canchangewebsite" => 1,
 	"showforumteam" => 0,
@@ -809,7 +810,7 @@ if($mybb->input['action'] == "edit")
 	}
 	else
 	{
-		if(preg_match("#<((m[^a])|(b[^diloru>])|(s[^aemptu>]))(\s*[^>]*)>#si", $mybb->input['namestyle']))
+		if(preg_match("#<((m[^a])|(b[^diloru>])|(s[^aemptu>]))(\s*[^>]*)>#si", $mybb->get_input('namestyle')))
 		{
 			$errors[] = $lang->error_disallowed_namestyle_username;
 			$mybb->input['namestyle'] = $usergroup['namestyle'];
@@ -923,6 +924,7 @@ if($mybb->input['action'] == "edit")
 				"canuploadavatars" => $mybb->get_input('canuploadavatars', MyBB::INPUT_INT),
 				"canchangename" => $mybb->get_input('canchangename', MyBB::INPUT_INT),
 				"canbereported" => $mybb->get_input('canbereported', MyBB::INPUT_INT),
+				"canbeinvisible" => $mybb->get_input('canbeinvisible', MyBB::INPUT_INT),
 				"canchangewebsite" => $mybb->get_input('canchangewebsite', MyBB::INPUT_INT),
 				"showforumteam" => $mybb->get_input('showforumteam', MyBB::INPUT_INT),
 				"usereputationsystem" => $mybb->get_input('usereputationsystem', MyBB::INPUT_INT),
@@ -1153,6 +1155,7 @@ if($mybb->input['action'] == "edit")
 
 	$account_options = array(
 		$form->generate_check_box("canbereported", 1, $lang->can_be_reported, array("checked" => $mybb->input['canbereported'])),
+		$form->generate_check_box("canbeinvisible", 1, $lang->can_be_invisible, array("checked" => $mybb->input['canbeinvisible'])),
 		$form->generate_check_box("canusercp", 1, $lang->can_access_usercp, array("checked" => $mybb->input['canusercp'])),
 		$form->generate_check_box("canchangename", 1, $lang->can_change_username, array("checked" => $mybb->input['canchangename'])),
 		$form->generate_check_box("cancustomtitle", 1, $lang->can_use_usertitles, array("checked" => $mybb->input['cancustomtitle'])),
@@ -1405,6 +1408,8 @@ if(!$mybb->input['action'])
 
 	$form = new Form("index.php?module=user-groups", "post", "groups");
 
+	$primaryusers = $secondaryusers = array();
+
 	$query = $db->query("
 		SELECT g.gid, COUNT(u.uid) AS users
 		FROM ".TABLE_PREFIX."users u
@@ -1491,20 +1496,24 @@ if(!$mybb->input['action'])
 		}
 
 		$join_requests = '';
-		if($joinrequests[$usergroup['gid']] > 1 && $usergroup['type'] == 4)
+		if(isset($joinrequests[$usergroup['gid']]) && $joinrequests[$usergroup['gid']] > 1 && $usergroup['type'] == 4)
 		{
 			$join_requests = " <small><a href=\"index.php?module=user-groups&amp;action=join_requests&amp;gid={$usergroup['gid']}\"><span style=\"color: red;\">({$joinrequests[$usergroup['gid']]} {$lang->outstanding_join_request})</span></a></small>";
 		}
-		else if($joinrequests[$usergroup['gid']] == 1 && $usergroup['type'] == 4)
+		else if(isset($joinrequests[$usergroup['gid']]) && $joinrequests[$usergroup['gid']] == 1 && $usergroup['type'] == 4)
 		{
 			$join_requests = " <small><a href=\"index.php?module=user-groups&amp;action=join_requests&amp;gid={$usergroup['gid']}\"><span style=\"color: red;\">({$joinrequests[$usergroup['gid']]} {$lang->outstanding_join_request})</span></a></small>";
 		}
 
 		$form_container->output_cell("<div class=\"float_right\">{$icon}</div><div><strong><a href=\"index.php?module=user-groups&amp;action=edit&amp;gid={$usergroup['gid']}\">".format_name(htmlspecialchars_uni($usergroup['title']), $usergroup['gid'])."</a></strong>{$join_requests}<br /><small>".htmlspecialchars_uni($usergroup['description'])."{$leaders_list}</small></div>");
 
-		if(!$primaryusers[$usergroup['gid']])
+		if(!isset($primaryusers[$usergroup['gid']]))
 		{
 			$primaryusers[$usergroup['gid']] = 0;
+		}
+		if(!isset($secondaryusers[$usergroup['gid']]))
+		{
+			$secondaryusers[$usergroup['gid']] = 0;
 		}
 		$numusers = $primaryusers[$usergroup['gid']];
 		$numusers += $secondaryusers[$usergroup['gid']];
@@ -1523,7 +1532,7 @@ if(!$mybb->input['action'])
 		$popup = new PopupMenu("usergroup_{$usergroup['gid']}", $lang->options);
 		$popup->add_item($lang->edit_group, "index.php?module=user-groups&amp;action=edit&amp;gid={$usergroup['gid']}");
 		$popup->add_item($lang->list_users, "index.php?module=user-users&amp;action=search&amp;results=1&amp;conditions[usergroup]={$usergroup['gid']}");
-		if($joinrequests[$usergroup['gid']] > 0 && $usergroup['type'] == 4)
+		if(isset($joinrequests[$usergroup['gid']]) && $joinrequests[$usergroup['gid']] > 0 && $usergroup['type'] == 4)
 		{
 			$popup->add_item($lang->join_requests, "index.php?module=user-groups&amp;action=join_requests&amp;gid={$usergroup['gid']}");
 		}

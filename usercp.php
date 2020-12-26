@@ -872,13 +872,20 @@ if($mybb->input['action'] == "options")
 		$allownoticescheck = "";
 	}
 
-	if(isset($user['invisible']) && $user['invisible'] == 1)
+	$canbeinvisible = '';
+
+	// Check usergroup permission before showing invisible check box
+	if($mybb->usergroup['canbeinvisible'] == 1)
 	{
-		$invisiblecheck = "checked=\"checked\"";
-	}
-	else
-	{
-		$invisiblecheck = "";
+		if(isset($user['invisible']) && $user['invisible'] == 1)
+		{
+			$invisiblecheck .= "checked=\"checked\"";
+		}
+		elseif($user['invisible'] != 0)
+		{
+			$invisiblecheck = "";
+		}
+		eval('$canbeinvisible = "'.$templates->get("usercp_options_invisible")."\";");
 	}
 
 	if(isset($user['hideemail']) && $user['hideemail'] == 1)
@@ -1696,12 +1703,14 @@ if($mybb->input['action'] == "subscriptions")
 
 			if($mybb->settings['threadreadcut'] > 0)
 			{
-				$forum_read = $readforums[$thread['fid']];
-
 				$read_cutoff = TIME_NOW-$mybb->settings['threadreadcut']*60*60*24;
-				if($forum_read == 0 || $forum_read < $read_cutoff)
+				if(empty($readforums[$thread['fid']]) || $readforums[$thread['fid']] < $read_cutoff)
 				{
 					$forum_read = $read_cutoff;
+				}
+				else
+				{
+					$forum_read = $readforums[$thread['fid']];
 				}
 			}
 
@@ -1713,7 +1722,7 @@ if($mybb->input['action'] == "subscriptions")
 
 			if($thread['lastpost'] > $cutoff)
 			{
-				if($thread['lastread'])
+				if(!empty($thread['lastread']))
 				{
 					$lastread = $thread['lastread'];
 				}
@@ -1772,6 +1781,7 @@ if($mybb->input['action'] == "subscriptions")
 
 			// Build last post info
 			$lastpostdate = my_date('relative', $thread['lastpost']);
+			$lastposteruid = $thread['lastposteruid'];
 			if(!$lastposteruid && !$thread['lastposter'])
 			{
 				$lastposter = htmlspecialchars_uni($lang->guest);
@@ -1780,7 +1790,6 @@ if($mybb->input['action'] == "subscriptions")
 			{
 				$lastposter = htmlspecialchars_uni($thread['lastposter']);
 			}
-			$lastposteruid = $thread['lastposteruid'];
 
 			// Don't link to guest's profiles (they have no profile).
 			if($lastposteruid == 0)
@@ -3197,7 +3206,7 @@ if($mybb->input['action'] == "do_editlists")
 			{
 				echo "\$(\"#".$mybb->get_input('manage')."_count\").html(\"0\");\n";
 				echo "\$(\"#buddylink\").remove();\n";
-				
+
 				if($mybb->get_input('manage') == "ignored")
 				{
 					echo "\$(\"#ignore_list\").html(\"<li>{$lang->ignore_list_empty}</li>\");\n";
@@ -3338,7 +3347,7 @@ if($mybb->input['action'] == "editlists")
 		exit;
 	}
 
-	$received_rows = '';
+	$received_rows = $bgcolor = '';
 	$query = $db->query("
 		SELECT r.*, u.username
 		FROM ".TABLE_PREFIX."buddyrequests r
@@ -3360,7 +3369,7 @@ if($mybb->input['action'] == "editlists")
 
 	eval("\$received_requests = \"".$templates->get("usercp_editlists_received_requests")."\";");
 
-	$sent_rows = '';
+	$sent_rows = $bgcolor = '';
 	$query = $db->query("
 		SELECT r.*, u.username
 		FROM ".TABLE_PREFIX."buddyrequests r
@@ -3407,7 +3416,7 @@ if($mybb->input['action'] == "drafts")
 			LEFT JOIN ".TABLE_PREFIX."threads t ON (t.tid=p.tid)
 			LEFT JOIN ".TABLE_PREFIX."forums f ON (f.fid=t.fid)
 			WHERE p.uid = '{$mybb->user['uid']}' AND p.visible = '-2'
-			ORDER BY p.dateline DESC
+			ORDER BY p.dateline DESC, p.pid DESC
 		");
 
 		while($draft = $db->fetch_array($query))
@@ -3606,7 +3615,7 @@ if($mybb->input['action'] == "usergroups")
 		if($mybb->get_input('do') == "joingroup" && $usergroup['type'] == 4)
 		{
 			$reasonlength = my_strlen($mybb->get_input('reason'));
-			
+
 			if($reasonlength > 250) // Reason field is varchar(250) in database
 			{
 				error($lang->sprintf($lang->joinreason_too_long, ($reasonlength - 250)));
@@ -3745,7 +3754,11 @@ if($mybb->input['action'] == "usergroups")
 	$usergroup = $usergroups[$mybb->user['usergroup']];
 	$usergroup['title'] = htmlspecialchars_uni($usergroup['title']);
 	$usergroup['usertitle'] = htmlspecialchars_uni($usergroup['usertitle']);
-	$usergroup['description'] = htmlspecialchars_uni($usergroup['description']);
+	if($usergroup['description'])
+	{
+		$usergroup['description'] = htmlspecialchars_uni($usergroup['description']);
+		eval("\$description = \"".$templates->get("usercp_usergroups_memberof_usergroup_description")."\";");
+	}
 	eval("\$leavelink = \"".$templates->get("usercp_usergroups_memberof_usergroup_leaveprimary")."\";");
 	$trow = alt_trow();
 	if($usergroup['candisplaygroup'] == 1 && $usergroup['gid'] == $mybb->user['displaygroup'])
@@ -3954,7 +3967,7 @@ if($mybb->input['action'] == "attachments")
 		LEFT JOIN ".TABLE_PREFIX."posts p ON (a.pid=p.pid)
 		LEFT JOIN ".TABLE_PREFIX."threads t ON (t.tid=p.tid)
 		WHERE a.uid='".$mybb->user['uid']."' {$f_perm_sql}
-		ORDER BY p.dateline DESC LIMIT {$start}, {$perpage}
+		ORDER BY p.dateline DESC, p.pid DESC LIMIT {$start}, {$perpage}
 	");
 
 	$bandwidth = $totaldownloads = $totalusage = $totalattachments = $processedattachments = 0;
@@ -3991,6 +4004,7 @@ if($mybb->input['action'] == "attachments")
 		++$processedattachments;
 	}
 
+	$multipage = '';
 	if($processedattachments >= $perpage || $page > 1)
 	{
 		$query = $db->query("
@@ -4023,10 +4037,13 @@ if($mybb->input['action'] == "attachments")
 
 	$bandwidth = get_friendly_size($bandwidth);
 
+	eval("\$delete_button = \"".$templates->get("delete_attachments_button")."\";");
+
 	if(!$attachments)
 	{
 		eval("\$attachments = \"".$templates->get("usercp_attachments_none")."\";");
 		$usagenote = '';
+		$delete_button = '';
 	}
 
 	$plugins->run_hooks("usercp_attachments_end");
@@ -4247,6 +4264,7 @@ if(!$mybb->input['action'])
 	$mybb->user['posts'] = my_number_format($mybb->user['postnum']);
 
 	// Build referral link
+	$referral_info = '';
 	if($mybb->settings['usereferrals'] == 1)
 	{
 		$referral_link = $lang->sprintf($lang->referral_link, $settings['bburl'], $mybb->user['uid']);
@@ -4292,7 +4310,7 @@ if(!$mybb->input['action'])
 		while($subscription = $db->fetch_array($query))
 		{
 			$forumpermissions = $fpermissions[$subscription['fid']];
-			if($forumpermissions['canview'] != 0 && $forumpermissions['canviewthreads'] != 0 && ($forumpermissions['canonlyviewownthreads'] == 0 || $subscription['uid'] == $mybb->user['uid']))
+			if(!empty($forumpermissions['canview']) && !empty($forumpermissions['canviewthreads']) && (empty($forumpermissions['canonlyviewownthreads'])|| $subscription['uid'] == $mybb->user['uid']))
 			{
 				$subscriptions[$subscription['tid']] = $subscription;
 			}
@@ -4372,14 +4390,14 @@ if(!$mybb->input['action'])
 							$icon = "&nbsp;";
 						}
 
-						if($thread['doticon'])
+						if(!isset($thread['doticon']))
 						{
 							$folder = "dot_";
 							$folder_label .= $lang->icon_dot;
 						}
 
 						// Check to see which icon we display
-						if($thread['lastread'] && $thread['lastread'] < $thread['lastpost'])
+						if(!empty($thread['lastread']) && $thread['lastread'] < $thread['lastpost'])
 						{
 							$folder .= "new";
 							$folder_label .= $lang->icon_new;
@@ -4425,7 +4443,7 @@ if(!$mybb->input['action'])
 						$thread['username'] = htmlspecialchars_uni($thread['username']);
 						$thread['author'] = build_profile_link($thread['username'], $thread['uid']);
 
-						eval("\$latest_subscribed_threads .= \"".$templates->get("usercp_latest_subscribed_threads")."\";");
+						eval("\$latest_subscribed_threads = \"".$templates->get("usercp_latest_subscribed_threads")."\";");
 					}
 				}
 				eval("\$latest_subscribed = \"".$templates->get("usercp_latest_subscribed")."\";");
@@ -4528,7 +4546,7 @@ if(!$mybb->input['action'])
 		$latest_threads_threads = '';
 		foreach($threadcache as $thread)
 		{
-			$plugins->run_hooks("usercp_latest_threads_thread"); 
+			$plugins->run_hooks("usercp_latest_threads_thread");
 			if($thread['tid'])
 			{
 				$bgcolor = alt_trow();
@@ -4590,7 +4608,7 @@ if(!$mybb->input['action'])
 				$cutoff = 0;
 				if($thread['lastpost'] > $cutoff)
 				{
-					if($thread['lastread'])
+					if(!empty($thread['lastread']))
 					{
 						$lastread = $thread['lastread'];
 					}
