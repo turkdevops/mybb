@@ -573,7 +573,7 @@ function build_postbit($post, $post_type=0)
 		}
 
 		// Figure out if we need to show an "edited by" message
-		if($post['edituid'] != 0 && $post['edittime'] != 0 && $post['editusername'] != "" && (($mybb->settings['showeditedby'] != 0 && $usergroup['cancp'] == 0) || ($mybb->settings['showeditedbyadmin'] != 0 && $usergroup['cancp'] == 1)))
+		if($post['edituid'] != 0 && $post['edittime'] != 0 && $post['editusername'] != "" && (($mybb->settings['showeditedby'] != 0 && $usergroup['cancp'] == 0) || ($mybb->settings['showeditedbyadmin'] != 0 && $usergroup['cancp'] == 1 || is_moderator($post['fid'], "", $post['uid']))))
 		{
 			$post['editdate'] = my_date('relative', $post['edittime']);
 			$post['editnote'] = $lang->sprintf($lang->postbit_edited, $post['editdate']);
@@ -1017,7 +1017,20 @@ function get_post_attachments($id, &$post)
 					}
 					elseif((($attachment['thumbnail'] == "SMALL" && $forumpermissions['candlattachments'] == 1) || $mybb->settings['attachthumbnails'] == "no") && $isimage)
 					{
-						eval("\$post['imagelist'] .= \"".$templates->get("postbit_attachments_images_image")."\";");
+						if ($forumpermissions['candlattachments'])
+						{
+							eval("\$post['imagelist'] .= \"".$templates->get("postbit_attachments_images_image")."\";");
+						} 
+						else 
+						{
+							eval("\$post['thumblist'] .= \"".$templates->get("postbit_attachments_thumbnails_thumbnail")."\";");
+							if($tcount == 5)
+							{
+								$thumblist .= "<br />";
+								$tcount = 0;
+							}
+							++$tcount;
+						}
 					}
 					else
 					{

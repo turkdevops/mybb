@@ -31,6 +31,7 @@ require_once "./global.php";
 require_once MYBB_ROOT."inc/functions_post.php";
 require_once MYBB_ROOT."inc/functions_user.php";
 require_once MYBB_ROOT."inc/class_parser.php";
+require_once MYBB_ROOT."inc/functions_modcp.php";
 $parser = new postParser;
 
 // Load global language phrases
@@ -1219,6 +1220,7 @@ if($mybb->input['action'] == "register")
 				hiddencaptchaimage: '{$mybb->settings['hiddencaptchaimage']}'
 			};
 
+			lang.js_validator_no_username = '{$lang->js_validator_no_username}';
 			lang.js_validator_username_length = '{$lang->js_validator_username_length}';
 			lang.js_validator_invalid_email = '{$lang->js_validator_invalid_email}';
 			lang.js_validator_email_match = '{$lang->js_validator_email_match}';
@@ -2728,19 +2730,23 @@ if($mybb->input['action'] == "profile")
 			$memprofile['usernotes'] = $lang->no_usernotes;
 		}
 
-		if($mybb->usergroup['caneditprofiles'] == 1)
+		if($mybb->usergroup['caneditprofiles'] == 1 && modcp_can_manage_user($memprofile['uid']))
 		{
-			eval("\$editprofile = \"".$templates->get("member_profile_modoptions_editprofile")."\";");
-			eval("\$editnotes = \"".$templates->get("member_profile_modoptions_editnotes")."\";");
+			if(modcp_can_manage_user($memprofile['uid']))
+			{
+				eval("\$editprofile = \"".$templates->get("member_profile_modoptions_editprofile")."\";");
+				eval("\$editnotes = \"".$templates->get("member_profile_modoptions_editnotes")."\";");
+		
+			}
 		}
 
-		if($mybb->usergroup['canbanusers'] == 1 && !empty($memban) && (!$memban['uid'] || $memban['uid'] && ($mybb->user['uid'] == $memban['admin']) || $mybb->usergroup['issupermod'] == 1 || $mybb->usergroup['cancp'] == 1))
+		if($memperms['isbannedgroup'] == 1 && $mybb->usergroup['canbanusers'] == 1 && modcp_can_manage_user($memprofile['uid']))
 		{
-			if($memperms['isbannedgroup'] == 1 && $mybb->usergroup['canbanusers'] == 1)
-			{
-				eval("\$manageban = \"".$templates->get("member_profile_modoptions_manageban")."\";");
-			}
-			else
+			eval("\$manageban = \"".$templates->get("member_profile_modoptions_manageban")."\";");
+		}
+		elseif(modcp_can_manage_user($memprofile['uid']) && $mybb->usergroup['canbanusers'] == 1)
+		{
+			if(modcp_can_manage_user($memprofile['uid']) && $mybb->usergroup['canbanusers'] == 1)
 			{
 				eval("\$banuser = \"".$templates->get("member_profile_modoptions_banuser")."\";");
 			}
