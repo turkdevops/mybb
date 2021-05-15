@@ -8,6 +8,25 @@
  *
  */
 
+/**
+ * Get maximum upload filesize limit set in PHP
+ * @since MyBB 1.8.27
+ * @return int maximum allowed filesize
+ */
+function get_php_upload_limit()
+{	
+	$maxsize = array(return_bytes(ini_get('upload_max_filesize')), return_bytes(ini_get('post_max_size')));
+	$maxsize = array_filter($maxsize); // Remove empty values
+
+	if(empty($maxsize))
+	{
+		return 0;
+	}
+	else
+	{
+		return (int)min($maxsize);
+	}
+}
 
 /**
  * Remove an attachment from a specific post
@@ -42,14 +61,7 @@ function remove_attachment($pid, $posthash, $aid)
 
 	$db->delete_query("attachments", "aid='{$attachment['aid']}'");
 
-	if(defined('IN_ADMINCP'))
-	{
-	    $uploadpath = '../'.$mybb->settings['uploadspath'];
-	}
-	else
-	{
-	    $uploadpath = $mybb->settings['uploadspath'];
-	}
+	$uploadpath = $mybb->settings['uploadspath'];
 
 	// Check if this attachment is referenced in any other posts. If it isn't, then we are safe to delete the actual file.
 	$query = $db->simple_select("attachments", "COUNT(aid) as numreferences", "attachname='".$db->escape_string($attachment['attachname'])."'");
@@ -100,14 +112,7 @@ function remove_attachments($pid, $posthash="")
 		$query = $db->simple_select("attachments", "*", "pid='$pid'");
 	}
 
-	if(defined('IN_ADMINCP'))
-	{
-	    $uploadpath = '../'.$mybb->settings['uploadspath'];
-	}
-	else
-	{
-	    $uploadpath = $mybb->settings['uploadspath'];
-	}
+	$uploadpath = $mybb->settings['uploadspath'];
 
 	$num_attachments = 0;
 	while($attachment = $db->fetch_array($query))
@@ -212,7 +217,7 @@ function upload_avatar($avatar=array(), $uid=0)
 		$uid = $mybb->user['uid'];
 	}
 
-	if(!$avatar['name'] || !$avatar['tmp_name'])
+	if(empty($avatar['name']) || empty($avatar['tmp_name']))
 	{
 		$avatar = $_FILES['avatarupload'];
 	}
@@ -243,7 +248,7 @@ function upload_avatar($avatar=array(), $uid=0)
 
 	$filename = "avatar_".$uid.".".$ext;
 	$file = upload_file($avatar, $avatarpath, $filename);
-	if($file['error'])
+	if(!empty($file['error']))
 	{
 		delete_uploaded_file($avatarpath."/".$filename);
 		$ret['error'] = $lang->error_uploadfailed;
@@ -597,12 +602,12 @@ function upload_attachment($attachment, $update_attachment=false)
 		if(function_exists("finfo_open"))
 		{
 			$file_info = finfo_open(FILEINFO_MIME);
-			list($mime, ) = explode(';', finfo_file($file_info, MYBB_ROOT.$file_path), 1);
+			list($mime, ) = explode(';', finfo_file($file_info, $file_path), 1);
 			finfo_close($file_info);
 		}
 		else if(function_exists("mime_content_type"))
 		{
-			$mime = mime_content_type(MYBB_ROOT.$file_path);
+			$mime = mime_content_type($file_path);
 		}
 
 		if(!is_array($img_dimensions) || ($img_dimensions[2] != $img_type && !in_array($mime, $supported_mimes)))
@@ -801,15 +806,25 @@ function add_attachments($pid, $forumpermissions, $attachwhere, $action=false)
 							$update_attachment = true;
 						}
 					}
-
-					$attachedfile = upload_attachment($FILE, $update_attachment);
-
-					if(!empty($attachedfile['error']))
+					
+					if(!$exists && $mybb->get_input('updateattachment') && $mybb->get_input('updateconfirmed', MyBB::INPUT_INT) != 1)
 					{
-						$ret['errors'][] = $attachedfile['error'];
-						$mybb->input['action'] = $action;
+						$ret['errors'][] = $lang->sprintf($lang->error_updatefailed, $filename);
 					}
+					else
+					{
+						$attachedfile = upload_attachment($FILE, $update_attachment);
 
+						if(!empty($attachedfile['error']))
+						{
+							$ret['errors'][] = $attachedfile['error'];
+							$mybb->input['action'] = $action;
+						}
+						else if(isset($attachedfile['aid']) && $mybb->get_input('ajax', MyBB::INPUT_INT) == 1)
+						{
+							$ret['success'][] = array($attachedfile['aid'], get_attachment_icon(get_extension($filename)), $filename, get_friendly_size($FILE['size']));
+						}
+					}
 				}
 				else
 				{

@@ -114,6 +114,7 @@ if(is_dir(MYBB_ROOT."install") && !file_exists(MYBB_ROOT."install/lock"))
 
 // Load DB interface
 require_once MYBB_ROOT."inc/db_base.php";
+require_once MYBB_ROOT . 'inc/AbstractPdoDbDriver.php';
 
 require_once MYBB_ROOT."inc/db_".$config['database']['type'].".php";
 
@@ -125,8 +126,14 @@ switch($config['database']['type'])
 	case "pgsql":
 		$db = new DB_PgSQL;
 		break;
+	case "pgsql_pdo":
+		$db = new PostgresPdoDbDriver();
+		break;
 	case "mysqli":
 		$db = new DB_MySQLi;
+		break;
+	case "mysql_pdo":
+		$db = new MysqlPdoDbDriver();
 		break;
 	default:
 		$db = new DB_MySQL;
@@ -201,6 +208,14 @@ $settings['bbname_orig'] = $settings['bbname'];
 $settings['bbname'] = strip_tags($settings['bbname']);
 $settings['orig_bblanguage'] = $settings['bblanguage'];
 
+// Adjust a relative upload path to an absolute one
+$iswin = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+$char1 = my_substr($settings['uploadspath'], 0, 1);
+if($char1 != '/' && !($iswin && ($char1 == '\\' || preg_match('(^[a-zA-Z]:\\\\)', $settings['uploadspath']))))
+{
+	$settings['uploadspath'] = MYBB_ROOT.$settings['uploadspath'];
+}
+
 // Fix for people who for some specify a trailing slash on the board URL
 if(substr($settings['bburl'], -1) == "/")
 {
@@ -243,9 +258,6 @@ if(!defined("NO_PLUGINS") && !($mybb->settings['no_plugins'] == 1))
 {
 	$plugins->load();
 }
-
-// Set up any shutdown functions we need to run globally
-add_shutdown('send_mail_queue');
 
 /* URL Definitions */
 if($mybb->settings['seourls'] == "yes" || ($mybb->settings['seourls'] == "auto" && isset($_SERVER['SEO_SUPPORT']) && $_SERVER['SEO_SUPPORT'] == 1))

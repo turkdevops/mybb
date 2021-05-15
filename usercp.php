@@ -284,7 +284,11 @@ if($mybb->input['action'] == "do_profile" && $mybb->request_method == "post")
 		{
 			$mybb->input['birthdayprivacy'] = $mybb->user['birthdayprivacy'];
 			$bday = explode("-", $mybb->user['birthday']);
-			$mybb->input['bday3'] = $bday[2];
+
+			if(isset($bday[2]))
+			{
+				$mybb->input['bday3'] = $bday[2];
+			}
 		}
 
 		$errors = inline_error($errors);
@@ -881,9 +885,9 @@ if($mybb->input['action'] == "options")
 	{
 		if(isset($user['invisible']) && $user['invisible'] == 1)
 		{
-			$invisiblecheck .= "checked=\"checked\"";
+			$invisiblecheck = "checked=\"checked\"";
 		}
-		elseif($user['invisible'] != 0)
+		else
 		{
 			$invisiblecheck = "";
 		}
@@ -2431,8 +2435,18 @@ if($mybb->input['action'] == "editsig")
 		{
 			$sigimgcode = $lang->off;
 		}
+
+		if($mybb->settings['siglength'] == 0)
+		{
+			$siglength = $lang->unlimited;
+		}
+		else
+		{
+			$siglength = $mybb->settings['siglength'];
+		}
+
 		$sig = htmlspecialchars_uni($sig);
-		$lang->edit_sig_note2 = $lang->sprintf($lang->edit_sig_note2, $sigsmilies, $sigmycode, $sigimgcode, $sightml, $mybb->settings['siglength']);
+		$lang->edit_sig_note2 = $lang->sprintf($lang->edit_sig_note2, $sigsmilies, $sigmycode, $sigimgcode, $sightml, $siglength);
 
 		if($mybb->settings['sigmycode'] != 0 && $mybb->settings['bbcodeinserter'] != 0 && $mybb->user['showcodebuttons'] != 0)
 		{
@@ -2474,7 +2488,7 @@ if($mybb->input['action'] == "do_avatar" && $mybb->request_method == "post")
 			error_no_permission();
 		}
 		$avatar = upload_avatar();
-		if($avatar['error'])
+		if(!empty($avatar['error']))
 		{
 			$avatar_error = $avatar['error'];
 		}
@@ -3341,7 +3355,6 @@ if($mybb->input['action'] == "editlists")
 
 				eval("\$sent_requests = \"".$templates->get("usercp_editlists_sent_requests", 1, 0)."\";");
 
-				echo $sentrequests;
 				echo $sent_requests."<script type=\"text/javascript\">{$message_js}</script>";
 			}
 			else
@@ -3497,6 +3510,10 @@ if($mybb->input['action'] == "do_drafts" && $mybb->request_method == "post")
 		$tidin = implode(",", $tidin);
 		$db->delete_query("threads", "tid IN ($tidin) AND visible='-2' AND uid='".$mybb->user['uid']."'");
 		$tidinp = "OR tid IN ($tidin)";
+	}
+	else
+	{
+		$tidinp = '';
 	}
 	if($pidin || $tidinp)
 	{
@@ -3784,7 +3801,14 @@ if($mybb->input['action'] == "usergroups")
 	$showmemberof = false;
 	if($mybb->user['additionalgroups'])
 	{
-		$query = $db->simple_select("usergroups", "*", "gid IN (".$mybb->user['additionalgroups'].") AND gid !='".$mybb->user['usergroup']."'", array('order_by' => 'title'));
+		$additionalgroups = implode(
+			',',
+			array_map(
+				'intval',
+				explode(',', $mybb->user['additionalgroups'])
+			)
+		);
+		$query = $db->simple_select("usergroups", "*", "gid IN (".$additionalgroups.") AND gid !='".$mybb->user['usergroup']."'", array('order_by' => 'title'));
 		while($usergroup = $db->fetch_array($query))
 		{
 			$showmemberof = true;
@@ -3839,7 +3863,14 @@ if($mybb->input['action'] == "usergroups")
 	$existinggroups = $mybb->user['usergroup'];
 	if($mybb->user['additionalgroups'])
 	{
-		$existinggroups .= ",".$mybb->user['additionalgroups'];
+		$additionalgroups = implode(
+			',',
+			array_map(
+				'intval',
+				explode(',', $mybb->user['additionalgroups'])
+			)
+		);
+		$existinggroups .= ",".$additionalgroups;
 	}
 
 	$joinablegroups = $joinablegrouplist = '';
@@ -4356,6 +4387,7 @@ if(!$mybb->input['action'])
 
 				$icon_cache = $cache->read("posticons");
 				$threadprefixes = build_prefixes();
+				$latest_subscribed_threads = '';
 
 				foreach($subscriptions as $thread)
 				{
@@ -4449,7 +4481,7 @@ if(!$mybb->input['action'])
 						$thread['username'] = htmlspecialchars_uni($thread['username']);
 						$thread['author'] = build_profile_link($thread['username'], $thread['uid']);
 
-						eval("\$latest_subscribed_threads = \"".$templates->get("usercp_latest_subscribed_threads")."\";");
+						eval("\$latest_subscribed_threads .= \"".$templates->get("usercp_latest_subscribed_threads")."\";");
 					}
 				}
 				eval("\$latest_subscribed = \"".$templates->get("usercp_latest_subscribed")."\";");

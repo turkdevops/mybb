@@ -61,6 +61,7 @@ if($config['database']['type'] == 'sqlite3' || $config['database']['type'] == 's
 
 // Load DB interface
 require_once MYBB_ROOT."inc/db_base.php";
+require_once MYBB_ROOT . 'inc/AbstractPdoDbDriver.php';
 
 require_once MYBB_ROOT."inc/db_{$config['database']['type']}.php";
 switch($config['database']['type'])
@@ -71,8 +72,14 @@ switch($config['database']['type'])
 	case "pgsql":
 		$db = new DB_PgSQL;
 		break;
+	case "pgsql_pdo":
+		$db = new PostgresPdoDbDriver();
+		break;
 	case "mysqli":
 		$db = new DB_MySQLi;
+		break;
+	case "mysql_pdo":
+		$db = new MysqlPdoDbDriver();
 		break;
 	default:
 		$db = new DB_MySQL;
@@ -117,6 +124,12 @@ if(!file_exists(MYBB_ROOT."inc/settings.php") || !$settings)
 $settings['wolcutoff'] = $settings['wolcutoffmins']*60;
 $settings['bbname_orig'] = $settings['bbname'];
 $settings['bbname'] = strip_tags($settings['bbname']);
+
+// Adjust a relative upload path to an absolute one
+if(my_substr($settings['uploadspath'], 0, 1) != "/")
+{
+	$settings['uploadspath'] = MYBB_ROOT.$settings['uploadspath'];
+}
 
 // Fix for people who for some specify a trailing slash on the board URL
 if(substr($settings['bburl'], -1) == "/")
@@ -316,8 +329,16 @@ else
 		unset($upgradescripts);
 		unset($upgradescript);
 
-		$output->print_contents($lang->sprintf($lang->upgrade_welcome, $mybb->version)."<p><select name=\"from\">$vers</select>".$lang->upgrade_send_stats);
-		$output->print_footer("doupgrade");
+		if(end($version_history) == reset($key_order) && empty($mybb->input['force']))
+		{
+			$output->print_contents($lang->upgrade_not_needed);
+			$output->print_footer("finished");
+		}
+		else
+		{
+			$output->print_contents($lang->sprintf($lang->upgrade_welcome, $mybb->version)."<p><select name=\"from\">$vers</select>".$lang->upgrade_send_stats);
+			$output->print_footer("doupgrade");
+		}
 	}
 	elseif($mybb->input['action'] == "doupgrade")
 	{
