@@ -125,12 +125,6 @@ $settings['wolcutoff'] = $settings['wolcutoffmins']*60;
 $settings['bbname_orig'] = $settings['bbname'];
 $settings['bbname'] = strip_tags($settings['bbname']);
 
-// Adjust a relative upload path to an absolute one
-if(my_substr($settings['uploadspath'], 0, 1) != "/")
-{
-	$settings['uploadspath'] = MYBB_ROOT.$settings['uploadspath'];
-}
-
 // Fix for people who for some specify a trailing slash on the board URL
 if(substr($settings['bburl'], -1) == "/")
 {
@@ -273,11 +267,20 @@ else
 		{
 			$db->drop_table("upgrade_data");
 		}
+
+		$collation = $db->build_create_table_collation();
+		
+		$engine = '';
+		if($db->type == "mysql" || $db->type == "mysqli")
+		{
+			$engine = 'ENGINE=MyISAM';
+		}
+		
 		$db->write_query("CREATE TABLE ".TABLE_PREFIX."upgrade_data (
 			title varchar(30) NOT NULL,
 			contents text NOT NULL,
 			UNIQUE (title)
-		);");
+		) {$engine}{$collation};");
 
 		$dh = opendir(INSTALL_ROOT."resources");
 
